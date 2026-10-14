@@ -1,4 +1,4 @@
-# Time Tracker (Chrome extension, React + Vite)
+# Chroniq (Chrome extension, React + Vite)
 
 Automatically tracks how long you spend on each website per day, and how many times you open it.
 Data stays on your computer (`chrome.storage.local`). Nothing is sent anywhere.
@@ -16,7 +16,7 @@ The background worker has no page, so React can't run there.
 ## Folder structure
 
 ```
-time-tracker/
+Chroniq/
   index.html              popup entry page
   vite.config.js          builds TWO entries: popup + background
   package.json
@@ -78,3 +78,5 @@ time-tracker/
 4. `App.jsx`: read storage, sort, total, render rows
 5. Edge cases and the test checklist
 6. Polish, final build, optional Chrome Web Store
+
+   IN progress
