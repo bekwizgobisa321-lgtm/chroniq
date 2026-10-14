@@ -1,0 +1,11 @@
+header h1 { margin: 0; font-size: 18px; }
+.total { margin: 4px 0 12px; color: var(--muted); font-size: 14px; }
+.total strong { color: var(--text); }
+.site-list { list-style: none; margin: 0; padding: 0; }
+.site-list li { margin-bottom: 12px; }
+.row { display: flex; justify-content: space-between; font-size: 14px; }
+.domain { font-weight: 600; }
+.meta { color: var(--muted); }
+.bar { height: 6px; margin-top: 4px; background: var(--track); border-radius: 3px; overflow: hidden; }
+.bar > span { display: block; height: 100%; background: var(--accent); }
+.empty { color: var(--muted); font-size: 13px; }
