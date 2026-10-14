@@ -1,112 +1,129 @@
 // background.js: the service worker. It watches tabs and does the timing.
-// Open its console: chrome://extensions -> your extension -> "service worker".
+// Open its console: chrome://extensions -> Chroniq -> "service worker".
 
 import { getDomain, todayKey } from './utils.js';
 
-// ---------------------------------------------------------------
-// STORAGE SHAPE (keep these consistent everywhere)
-//
-// chrome.storage.local key "session"  -> what I'm tracking RIGHT NOW
-//   { domain: "youtube.com", startedAt: 1760000000000 }   or  null
-//
-// chrome.storage.local key "usage"    -> totals per day, per domain
-//   {
-//     "2026-10-12": {
-//       "youtube.com": { seconds: 1260, visits: 4 },
-//       "github.com":  { seconds: 3400, visits: 9 }
-//     }
-//   }
-//
-// Why the session lives in storage, not in a variable:
-// Chrome kills the service worker when it is idle. Variables vanish. Storage survives.
-// ---------------------------------------------------------------
+// STORAGE SHAPE
+// "session" -> { domain: "youtube.com", startedAt: 1760000000000 } or null
+// "usage"   -> { "2026-10-14": { "youtube.com": { seconds: 1260, visits: 4 } } }
 
-// ---------- Events (already wired; they only log for now) ----------
+// A session older than this is fake (laptop slept, worker was killed). We drop it.
+const MAX_SESSION_SECONDS = 5 * 60;
 
-chrome.tabs.onActivated.addListener((info) => {
-  console.log('[event] tab activated', info);
-  handleChange();
-});
+// Run one job at a time, so two events can never count the same seconds twice.
+let queue = Promise.resolve();
+function enqueue(job) {
+  queue = queue.then(job).catch((err) => console.error('[chroniq]', err));
+  return queue;
+}
+
+// ---------- Events ----------
+
+chrome.tabs.onActivated.addListener(() => enqueue(handleChange));
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   // onUpdated fires a lot. Only react when the URL actually changes.
-  if (changeInfo.url) {
-    console.log('[event] tab url changed', changeInfo.url);
-    handleChange();
-  }
+  if (changeInfo.url) enqueue(handleChange);
 });
 
 chrome.windows.onFocusChanged.addListener((windowId) => {
-  console.log('[event] window focus changed', windowId);
   if (windowId === chrome.windows.WINDOW_ID_NONE) {
-    // Chrome lost focus (I switched to another app)
-    stopTracking();
+    enqueue(stopTracking); // Chrome lost focus
   } else {
-    handleChange();
+    enqueue(handleChange);
   }
 });
 
-chrome.idle.setDetectionInterval(60); // seconds without input before "idle"
+chrome.idle.setDetectionInterval(60);
 chrome.idle.onStateChanged.addListener((state) => {
-  console.log('[event] idle state', state); // "active" | "idle" | "locked"
   if (state === 'active') {
-    handleChange();
+    enqueue(handleChange);
   } else {
-    stopTracking();
+    enqueue(stopTracking); // "idle" or "locked"
   }
 });
 
 chrome.runtime.onStartup.addListener(() => {
-  console.log('[event] browser started');
-  // TODO: a session saved before Chrome closed is stale. Discard it (do NOT add its time).
+  // A session saved before Chrome closed is stale. Discard it (do NOT add its time).
+  enqueue(async () => {
+    await chrome.storage.local.set({ session: null });
+    await handleChange();
+  });
 });
 
-// Safety net: save progress every minute so a long session isn't lost if the worker dies.
+// Safety net: every minute, save the time so far and restart the clock.
 chrome.alarms.create('save-progress', { periodInMinutes: 1 });
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === 'save-progress') {
-    console.log('[alarm] save progress');
-    // TODO: add the time so far to today's total, then reset startedAt to now
-    //       (so the same seconds are never counted twice)
-  }
+  if (alarm.name === 'save-progress') enqueue(saveProgress);
 });
 
-// ---------- Logic (yours to write) ----------
+// ---------- Logic ----------
 
-/**
- * Called whenever something might have changed what I'm looking at.
- * TODO 1: get the active tab in the focused window (chrome.tabs.query)
- * TODO 2: domain = getDomain(tab.url). If null -> stopTracking() and return.
- * TODO 3: read the current session. If it is already this domain -> do nothing.
- * TODO 4: otherwise stopTracking(), then startTracking(domain).
- */
+async function getSession() {
+  const { session } = await chrome.storage.local.get('session');
+  return session ?? null;
+}
+
+// What am I looking at right now? Start, keep, or stop tracking.
 async function handleChange() {
-  // TODO
+  const win = await chrome.windows.getLastFocused();
+  if (!win.focused) {
+    await stopTracking();
+    return;
+  }
+
+  const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  const domain = tab ? getDomain(tab.url) : null;
+  if (!domain) {
+    await stopTracking();
+    return;
+  }
+
+  const session = await getSession();
+  if (session && session.domain === domain) return; // same site: nothing to do
+
+  await stopTracking();
+  await startTracking(domain);
 }
 
-/**
- * Save "I started looking at <domain> at <now>" into storage.
- * Also count a VISIT here: this is a new arrival on the site.
- * Think: should a page reload count as a new visit? (Probably not. Why not?)
- */
+// Save "I started looking at <domain> at <now>" and count one visit.
 async function startTracking(domain) {
-  // TODO
+  await chrome.storage.local.set({ session: { domain, startedAt: Date.now() } });
+  await addUsage(domain, 0, true);
 }
 
-/**
- * Read the session, work out elapsed seconds, add them to today's usage, clear the session.
- * Do nothing if there is no session.
- * Think: what if the session is absurdly old (laptop slept)? Cap it?
- */
+// Add the elapsed time to today's total, then clear the session.
 async function stopTracking() {
-  // TODO
+  const session = await getSession();
+  if (!session) return;
+
+  const elapsed = Math.round((Date.now() - session.startedAt) / 1000);
+  await chrome.storage.local.set({ session: null });
+  if (elapsed > 0 && elapsed <= MAX_SESSION_SECONDS) {
+    await addUsage(session.domain, elapsed);
+  }
 }
 
-/**
- * Add seconds (and optionally a visit) to usage[today][domain].
- * Remember: storage reads/writes are async. Read the whole "usage" object,
- * change it, write it back.
- */
+// Add the time so far, and move startedAt to now (no second is counted twice).
+async function saveProgress() {
+  const session = await getSession();
+  if (!session) return;
+
+  const now = Date.now();
+  const elapsed = Math.round((now - session.startedAt) / 1000);
+  await chrome.storage.local.set({ session: { ...session, startedAt: now } });
+  if (elapsed > 0 && elapsed <= MAX_SESSION_SECONDS) {
+    await addUsage(session.domain, elapsed);
+  }
+}
+
+// usage[today][domain].seconds += seconds, and visits += 1 if countVisit.
 async function addUsage(domain, seconds, countVisit = false) {
-  // TODO
+  const { usage = {} } = await chrome.storage.local.get('usage');
+  const day = todayKey();
+  usage[day] ??= {};
+  usage[day][domain] ??= { seconds: 0, visits: 0 };
+  usage[day][domain].seconds += seconds;
+  if (countVisit) usage[day][domain].visits += 1;
+  await chrome.storage.local.set({ usage });
 }
