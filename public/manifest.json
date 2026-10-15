@@ -3,7 +3,7 @@
   "name": "Chroniq",
   "version": "0.1.0",
   "description": "See how much time you spend on each website, automatically.",
-  "permissions": ["tabs", "storage", "idle", "alarms"],
+ "permissions": ["tabs", "storage", "idle", "alarms", "favicon"],
   "background": {
     "service_worker": "background.js",
     "type": "module"
