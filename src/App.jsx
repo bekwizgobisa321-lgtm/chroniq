@@ -1,42 +1,69 @@
-import { useEffect, useState } from 'react'
-import SiteRow from './components/SiteRow.jsx'
-import { formatTime, todayKey } from './utils.js'
-import './App.css'
+import { useEffect, useState } from "react";
+import SiteRow from "./components/SiteRow.jsx";
+import { formatTime, todayKey } from "./utils.js";
+import "./App.css";
 
 function App() {
-  // Today's usage, shaped like:
-  // { "youtube.com": { seconds: 1260, visits: 4 }, "github.com": { seconds: 3400, visits: 9 } }
-  const [usage, setUsage] = useState({})
+  // Today's usage: { "youtube.com": { seconds: 1260, visits: 4 }, ... }
+  const [usage, setUsage] = useState({});
 
   useEffect(() => {
-    // TODO 1: read the "usage" key from chrome.storage.local (it is async)
-    // TODO 2: usage is saved per day, so pick today's object: all[todayKey()]
-    //         If nothing is saved yet, use {}
-    // TODO 3: call setUsage(...) with today's object
-  }, [])
+    function load() {
+      chrome.storage.local.get("usage").then((r) => {
+        const all = r.usage || {};
+        setUsage(all[todayKey()] || {});
+      });
+    }
 
-  // TODO 4: turn the usage object into an array of { domain, seconds, visits }
-  //         (hint: Object.entries) and sort it, biggest seconds first
-  // TODO 5: totalSeconds = sum of all seconds
-  // TODO 6: biggestSeconds = the largest seconds (used for the bar width)
+    load(); // when the popup opens
+
+    // refresh while the popup is open, when the background saves new time
+    chrome.storage.onChanged.addListener(load);
+    return () => chrome.storage.onChanged.removeListener(load);
+  }, []);
+
+  // { domain, seconds, visits } list, biggest time first
+  const sites = Object.entries(usage)
+    .map(([domain, data]) => ({
+      domain,
+      seconds: data.seconds,
+      visits: data.visits,
+    }))
+    .sort((a, b) => b.seconds - a.seconds);
+
+  const totalSeconds = sites.reduce((sum, site) => sum + site.seconds, 0);
+  const biggestSeconds = sites.length > 0 ? sites[0].seconds : 0;
 
   return (
     <div className="app">
       <header>
         <h1>Today</h1>
         <p className="total">
-          Total: <strong>{/* TODO: formatTime(totalSeconds) */}0s</strong>
+          Total: <strong>{formatTime(totalSeconds)}</strong>
         </p>
       </header>
 
       <ul className="site-list">
-        {/* TODO: map your sorted array to <SiteRow key=... domain=... seconds=... visits=... percent=... /> */}
+        {sites.map((site) => (
+          <SiteRow
+            key={site.domain}
+            domain={site.domain}
+            seconds={site.seconds}
+            visits={site.visits}
+            percent={
+              biggestSeconds > 0 ? (site.seconds / biggestSeconds) * 100 : 0
+            }
+          />
+        ))}
       </ul>
 
-      {/* TODO: show this message only when there is no data */}
-      <p className="empty">No data yet. Browse a bit, then reopen this popup.</p>
+      {sites.length === 0 && (
+        <p className="empty">
+          No data yet. Browse a bit, then reopen this popup.
+        </p>
+      )}
     </div>
-  )
+  );
 }
 
-export default App
+export default App;

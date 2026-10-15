@@ -1,7 +1,7 @@
 // background.js: the service worker. It watches tabs and does the timing.
 // Open its console: chrome://extensions -> Chroniq -> "service worker".
 
-import { getDomain, todayKey } from './utils.js';
+import { getDomain, todayKey } from "./utils.js";
 
 // STORAGE SHAPE
 // "session" -> { domain: "youtube.com", startedAt: 1760000000000 } or null
@@ -13,12 +13,12 @@ const MAX_SESSION_SECONDS = 5 * 60;
 // Run one job at a time, so two events can never count the same seconds twice.
 let queue = Promise.resolve();
 function enqueue(job) {
-  queue = queue.then(job).catch((err) => console.error('[chroniq]', err));
+  queue = queue.then(job).catch((err) => console.error("[chroniq]", err));
   return queue;
 }
 
 // ---------- Events ----------
-
+//"The user has switched to a different tab."
 chrome.tabs.onActivated.addListener(() => enqueue(handleChange));
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
@@ -36,7 +36,7 @@ chrome.windows.onFocusChanged.addListener((windowId) => {
 
 chrome.idle.setDetectionInterval(60);
 chrome.idle.onStateChanged.addListener((state) => {
-  if (state === 'active') {
+  if (state === "active") {
     enqueue(handleChange);
   } else {
     enqueue(stopTracking); // "idle" or "locked"
@@ -52,27 +52,40 @@ chrome.runtime.onStartup.addListener(() => {
 });
 
 // Safety net: every minute, save the time so far and restart the clock.
-chrome.alarms.create('save-progress', { periodInMinutes: 1 });
+chrome.alarms.create("save-progress", { periodInMinutes: 1 });
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === 'save-progress') enqueue(saveProgress);
+  if (alarm.name === "save-progress") enqueue(saveProgress);
 });
 
 // ---------- Logic ----------
 
 async function getSession() {
-  const { session } = await chrome.storage.local.get('session');
+  const { session } = await chrome.storage.local.get("session");
   return session ?? null;
+}
+
+//True only if a chrome window exists and has focus
+// True only if a Chrome window exists and has focus.
+async function isChromeFocused() {
+  try {
+    const win = await chrome.windows.getLastFocused();
+    return win.focused;
+  } catch {
+    return false; // no window at all
+  }
 }
 
 // What am I looking at right now? Start, keep, or stop tracking.
 async function handleChange() {
-  const win = await chrome.windows.getLastFocused();
-  if (!win.focused) {
+  if (!(await isChromeFocused())) {
     await stopTracking();
     return;
   }
 
-  const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  const [tab] = await chrome.tabs.query({
+    active: true,
+    lastFocusedWindow: true,
+  });
   const domain = tab ? getDomain(tab.url) : null;
   if (!domain) {
     await stopTracking();
@@ -88,7 +101,9 @@ async function handleChange() {
 
 // Save "I started looking at <domain> at <now>" and count one visit.
 async function startTracking(domain) {
-  await chrome.storage.local.set({ session: { domain, startedAt: Date.now() } });
+  await chrome.storage.local.set({
+    session: { domain, startedAt: Date.now() },
+  });
   await addUsage(domain, 0, true);
 }
 
@@ -119,7 +134,7 @@ async function saveProgress() {
 
 // usage[today][domain].seconds += seconds, and visits += 1 if countVisit.
 async function addUsage(domain, seconds, countVisit = false) {
-  const { usage = {} } = await chrome.storage.local.get('usage');
+  const { usage = {} } = await chrome.storage.local.get("usage");
   const day = todayKey();
   usage[day] ??= {};
   usage[day][domain] ??= { seconds: 0, visits: 0 };
