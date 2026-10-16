@@ -5,13 +5,21 @@
   --muted: #9a9aa3;
   --track: #3a3a3e;
   --line: #2e2e32;
+  color-scheme: dark;
 }
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 body {
   width: 360px;
   min-height: 120px;
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
 }

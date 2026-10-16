@@ -6,6 +6,7 @@ import { getDomain, todayKey } from "./utils.js";
 // STORAGE SHAPE
 // "session" -> { domain: "youtube.com", startedAt: 1760000000000 } or null
 // "usage"   -> { "2026-10-14": { "youtube.com": { seconds: 1260, visits: 4 } } }
+// "icons"   -> { "youtube.com": "https://www.youtube.com/favicon.ico" }
 
 // A session older than this is fake (laptop slept, worker was killed). We drop it.
 const MAX_SESSION_SECONDS = 5 * 60;
@@ -18,12 +19,13 @@ function enqueue(job) {
 }
 
 // ---------- Events ----------
-//"The user has switched to a different tab."
+
+// The user switched to a different tab.
 chrome.tabs.onActivated.addListener(() => enqueue(handleChange));
 
+// A tab's URL changed, or its icon arrived.
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
-  // onUpdated fires a lot. Only react when the URL actually changes.
-  if (changeInfo.url) enqueue(handleChange);
+  if (changeInfo.url || changeInfo.favIconUrl) enqueue(handleChange);
 });
 
 chrome.windows.onFocusChanged.addListener((windowId) => {
@@ -64,7 +66,6 @@ async function getSession() {
   return session ?? null;
 }
 
-//True only if a chrome window exists and has focus
 // True only if a Chrome window exists and has focus.
 async function isChromeFocused() {
   try {
@@ -73,6 +74,14 @@ async function isChromeFocused() {
   } catch {
     return false; // no window at all
   }
+}
+
+// Remember each site's icon link, so the popup can show it.
+async function saveIcon(domain, iconUrl) {
+  const { icons = {} } = await chrome.storage.local.get("icons");
+  if (icons[domain] === iconUrl) return;
+  icons[domain] = iconUrl;
+  await chrome.storage.local.set({ icons });
 }
 
 // What am I looking at right now? Start, keep, or stop tracking.
@@ -91,6 +100,9 @@ async function handleChange() {
     await stopTracking();
     return;
   }
+
+  // Remember this site's icon for the popup.
+  if (tab.favIconUrl) await saveIcon(domain, tab.favIconUrl);
 
   const session = await getSession();
   if (session && session.domain === domain) return; // same site: nothing to do

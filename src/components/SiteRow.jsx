@@ -1,23 +1,21 @@
 import { useState } from 'react'
 import { formatTime } from '../utils.js'
 
-// Props: domain, seconds, visits, percent (0 to 100), color
-function SiteRow({ domain, seconds, visits, percent, color }) {
+// Props: domain, seconds, visits, percent (0 to 100), color, icon (a link, or undefined)
+function SiteRow({ domain, seconds, visits, percent, color, icon }) {
   const [iconFailed, setIconFailed] = useState(false)
 
-  // Chrome gives us the site's icon through the "favicon" permission.
-  const iconUrl =
-    `${chrome.runtime.getURL('/_favicon/')}` +
-    `?pageUrl=${encodeURIComponent(`https://${domain}`)}&size=32`
+  // No saved icon yet: show a letter. Not Chrome's gray globe.
+  const showImage = icon && !iconFailed
 
   return (
     <li>
       <div className="row">
         <span className="icon">
-          {iconFailed ? (
-            domain[0].toUpperCase()
+          {showImage ? (
+            <img src={icon} alt="" onError={() => setIconFailed(true)} />
           ) : (
-            <img src={iconUrl} alt="" onError={() => setIconFailed(true)} />
+            domain[0].toUpperCase()
           )}
         </span>
         <span className="domain">{domain}</span>
