@@ -21,7 +21,7 @@
   list-style: none;
   margin: 0;
   padding: 0 4px 0 0;
-  max-height: 340px;
+  max-height: 220px;
   overflow-y: auto;
 }
 .site-list li { margin-bottom: 14px; }
@@ -47,3 +47,25 @@
 .bar > span { display: block; height: 100%; border-radius: 3px; }
 
 .empty { color: var(--muted); font-size: 13px; margin: 0; }
+
+.tabs { display: flex; gap: 6px; padding: 12px 18px 0; }
+.tab {
+  flex: 1;
+  padding: 7px 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.tab.active { background: var(--card); color: var(--text); border-color: var(--muted); }
+
+.week-section { border-top: 1px solid var(--line); }
+.week { display: flex; gap: 8px; align-items: flex-end; height: 140px; }
+.week-col { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; }
+.week-time { font-size: 10px; color: var(--muted); height: 14px; }
+.week-bar { flex: 1; width: 100%; display: flex; align-items: flex-end; }
+.week-bar > span { display: block; width: 100%; min-height: 2px; background: #6aa9e9; border-radius: 4px 4px 0 0; }
+.week-label { font-size: 11px; color: var(--muted); margin-top: 6px; }
