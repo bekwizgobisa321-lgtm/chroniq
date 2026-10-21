@@ -1,82 +1,153 @@
-# Chroniq (Chrome extension, React + Vite)
+# Chroniq
 
-Automatically tracks how long you spend on each website per day, and how many times you open it.
-Data stays on your computer (`chrome.storage.local`). Nothing is sent anywhere.
+A Chrome extension that automatically tracks how long you spend on each website, per day, and how many times you come back to it.
 
-## Two parts, two kinds of code
+**Your data stays on your computer.** Everything is saved in `chrome.storage.local`. Nothing is sent anywhere.
 
-| Part | File | Kind |
+<!-- Add a screenshot of the popup here: ![Chroniq popup](screenshots/popup.png) -->
+
+## Features
+
+- Automatic tracking of every `http` and `https` site in the active tab (no list to set up)
+- Ignores `chrome://` pages, the new tab page, and `about:blank`
+- Stops counting when Chrome loses focus, or when you are idle or the screen is locked
+- Popup with **Today**, **7 days** and **30 days** views
+- Total time, a donut chart of your top sites, and a list with time, visits and a bar for each site
+- A bar chart of the last 7 days
+- Site logos next to each name
+
+## How it works
+
+Chroniq has 3 parts that talk through one shared place:
+
+| Part | File | What it does |
 |---|---|---|
-| Popup (what you see when you click the icon) | `index.html`, `src/App.jsx`, `src/components/` | React |
-| Background worker (does the timing) | `src/background.js` | Plain JavaScript |
-| Shared helpers | `src/utils.js` | Plain JavaScript |
+| Background worker | `src/background.js` | Watches tabs, counts time, saves it. Plain JavaScript (it has no page) |
+| Storage | `chrome.storage.local` | The saved data. It survives restarts and worker sleep |
+| Popup | `src/App.jsx` and `src/components/` | React. It only reads the saved data and draws it |
 
-The background worker has no page, so React can't run there.
+The worker writes and the popup reads. They never talk directly.
 
-## Folder structure
+### The tracking loop
+
+1. A tab, window, idle or alarm event fires.
+2. `handleChange()` finds the active tab and its domain with `getDomain()`.
+3. Same site as before: do nothing (a reload is not a new visit).
+4. Different site: `stopTracking()` adds the elapsed seconds to the old site, then `startTracking()` saves the new site and the start time.
+5. Every minute, `saveProgress()` saves the time so far and restarts the clock. At most 1 minute is lost if the worker dies.
+
+**Why the session is saved in storage and not in a variable:** Chrome stops the service worker when it is idle, and variables are erased. We save a start time and subtract later (`now - startedAt`) instead of using a timer.
+
+**Safety rules**
+- A queue runs events one at a time, so time is never counted twice.
+- A session older than 5 minutes (laptop slept, worker killed) is thrown away.
+- A session saved before Chrome closed is cleared on startup.
+
+### Saved data
+
+```js
+// "session": what you are looking at right now, or null
+{ domain: "youtube.com", startedAt: 1760000000000 }
+
+// "usage": totals per day, per site
+{ "2026-10-20": { "youtube.com": { seconds: 1260, visits: 4 } } }
+
+// "icons": each site's logo link
+{ "youtube.com": "https://www.youtube.com/favicon.ico" }
+```
+
+Day keys use your local time, not UTC.
+
+## Permissions
+
+| Permission | Why |
+|---|---|
+| `tabs` | Read the address of the active tab |
+| `storage` | Save your usage data locally |
+| `idle` | Stop counting when you are away |
+| `alarms` | Save progress every minute |
+
+## Project structure
 
 ```
 Chroniq/
   index.html              popup entry page
-  vite.config.js          builds TWO entries: popup + background
+  vite.config.js          builds two entries: popup + background
   package.json
   .oxlintrc.json          linter config (knows about `chrome`)
   public/
     manifest.json         copied to dist/ as-is
-    icons/                16, 48, 128 px PNG icons
+    icons/                icon16.png, icon48.png, icon128.png
   src/
-    main.jsx              mounts React (done)
-    index.css             popup base styles (done)
-    App.css               list styles (done)
-    App.jsx               popup logic (TODO)
+    main.jsx              mounts React
+    index.css             base styles and color tokens
+    App.css               popup styles
+    App.jsx               popup logic: load data, range tabs, combine days
+    background.js         events and timing logic
+    utils.js              getDomain, dateKey, todayKey, lastDays, formatTime
     components/
-      SiteRow.jsx         one row of the list (done)
-    utils.js              getDomain, todayKey, formatTime (TODO)
-    background.js         events + timing logic (TODO)
+      SiteRow.jsx         one row: logo, name, time, visits, bar
+      Donut.jsx           donut chart made of SVG circles
+      WeekChart.jsx       bars for the last 7 days
 ```
 
-## Setup (one time)
+## Install and run (for development)
 
-1. Install Node.js (LTS) from nodejs.org if `node -v` doesn't work in your terminal
-2. Open this folder in VS Code
-3. In the terminal run: `npm install`
-4. Run: `npm run build`
-5. Open `chrome://extensions`, turn on **Developer mode**
-6. Click **Load unpacked** and choose the **`dist`** folder (not the project folder)
-7. Pin the extension from the puzzle icon in the toolbar
+1. Install Node.js (LTS) from nodejs.org
+2. Open this folder in VS Code and run in the terminal:
+```
+   npm install
+   npm run build
+```
+3. Open `chrome://extensions` and turn on **Developer mode**
+4. Click **Load unpacked** and choose the **`dist`** folder (not the project folder)
+5. Pin the extension from the puzzle icon in the toolbar
 
-## Daily loop
+### Daily loop
 
 1. Edit code in `src/`
-2. Run `npm run build` (or leave `npm run watch` running, it rebuilds on every save)
-3. Go to `chrome://extensions` and click the **reload** icon on the extension card
+2. Run `npm run build` (or keep `npm run watch` running)
+3. On `chrome://extensions`, click the **reload** icon on the extension card
 4. Reopen the popup
 
-`npm run dev` is not used for extensions.
+`npm run dev` is not used for extensions. Always load `dist/` and rebuild after every change.
 
-## Where to look when something breaks
+## Install for others (without a store)
 
-| What | Where |
+1. Download the `dist` folder (or a zip of it) from the latest release
+2. Unzip it, open `chrome://extensions` and turn on **Developer mode**
+3. Click **Load unpacked** and choose the unzipped folder
+
+Chrome shows a warning for extensions loaded this way. That is normal.
+
+## When something breaks
+
+| What | Where to look |
 |---|---|
-| Background logs and errors | `chrome://extensions` -> your extension -> **service worker** |
-| Popup logs and errors | Right-click the icon -> **Inspect popup** |
-| Load errors | Red **Errors** button on the extension card |
+| Background logs and errors | `chrome://extensions` → Chroniq → **service worker** |
+| Popup logs and errors | Right-click the icon → **Inspect popup** |
+| Load errors | The red **Errors** button on the extension card |
 | Build errors | The terminal where you ran `npm run build` |
-| See saved data | In the service worker console: `chrome.storage.local.get(null, console.log)` |
-| Wipe saved data | In the service worker console: `chrome.storage.local.clear()` |
+| See saved data | Service worker console: `chrome.storage.local.get(null, console.log)` |
+| Wipe saved data | Service worker console: `chrome.storage.local.clear()` |
 
-## Notes
-- `npm run lint` shows warnings about unused variables. That is normal until the TODOs are filled in.
-- Always load `dist/`, and rebuild after every change. Forgetting to rebuild is the most common mistake.
-- Chrome rejects extension files whose names start with `_`. Don't create any.
+Chrome rejects extension files whose names start with `_`. Don't create any.
 
-## Stages
+## Known limits
 
-1. Setup and first load (this folder is ready for it)
-2. `utils.js`: `getDomain`, `todayKey`, `formatTime`
-3. `background.js`: `handleChange`, `startTracking`, `stopTracking`, `addUsage`
-4. `App.jsx`: read storage, sort, total, render rows
-5. Edge cases and the test checklist
-6. Polish, final build, optional Chrome Web Store
+- It tracks websites in this browser on this computer only. It does not track other apps or your phone.
+- "Visits" means the number of times you came back to a site. Switching away and back counts again. A rule to ignore returns within 30 seconds is planned.
+- The idle limit is 60 seconds, so up to a minute of idle time can be counted before tracking stops.
 
-   IN progress
+## Roadmap
+
+- [x] Tracking: time and visits per site, per day
+- [x] Popup with the donut chart and site logos
+- [x] Today, 7 days and 30 days views, and the weekly chart
+- [ ] Fix the visits counter (ignore quick returns)
+- [ ] Test checklist: two tabs of the same site, idle, a new day, restart
+- [ ] Final icons
+- [ ] Categories (distracting, productive, neutral) and daily limits
+- [ ] Full-page dashboard
+- [ ] Export and backup of your data
+- [ ] Publish on Edge Add-ons and the Chrome Web Store
