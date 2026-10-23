@@ -1,5 +1,8 @@
 # Chroniq
 
+<img width="1806" height="916" alt="image" src="https://github.com/user-attachments/assets/6f5ee8f6-7922-4b60-8d12-bc71643b64a1" />
+
+
 A Chrome extension that automatically tracks how long you spend on each website, per day, and how many times you come back to it.
 
 **Your data stays on your computer.** Everything is saved in `chrome.storage.local`. Nothing is sent anywhere.
