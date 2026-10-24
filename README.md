@@ -2,12 +2,9 @@
 
 <img width="1806" height="916" alt="image" src="https://github.com/user-attachments/assets/6f5ee8f6-7922-4b60-8d12-bc71643b64a1" />
 
-
 A Chrome extension that automatically tracks how long you spend on each website, per day, and how many times you come back to it.
 
 **Your data stays on your computer.** Everything is saved in `chrome.storage.local`. Nothing is sent anywhere.
-
-<!-- Add a screenshot of the popup here: ![Chroniq popup](screenshots/popup.png) -->
 
 ## Features
 
@@ -18,6 +15,8 @@ A Chrome extension that automatically tracks how long you spend on each website,
 - Total time, a donut chart of your top sites, and a list with time, visits and a bar for each site
 - A bar chart of the last 7 days
 - Site logos next to each name
+- **Full-page dashboard** with 7, 30, 90 days and All time, stat tiles, a daily trend, a share chart and a table of all sites
+- **Export** your data as a JSON file
 
 ## How it works
 
@@ -27,9 +26,9 @@ Chroniq has 3 parts that talk through one shared place:
 |---|---|---|
 | Background worker | `src/background.js` | Watches tabs, counts time, saves it. Plain JavaScript (it has no page) |
 | Storage | `chrome.storage.local` | The saved data. It survives restarts and worker sleep |
-| Popup | `src/App.jsx` and `src/components/` | React. It only reads the saved data and draws it |
+| Popup and dashboard | `src/App.jsx`, `src/dashboard/` | React. They only read the saved data and draw it |
 
-The worker writes and the popup reads. They never talk directly.
+The worker writes. The popup and dashboard read. They never talk directly.
 
 ### The tracking loop
 
@@ -75,14 +74,15 @@ Day keys use your local time, not UTC.
 ```
 Chroniq/
   index.html              popup entry page
-  vite.config.js          builds two entries: popup + background
+  dashboard.html          full-page dashboard entry page
+  vite.config.js          builds 3 entries: popup, dashboard, background
   package.json
   .oxlintrc.json          linter config (knows about `chrome`)
   public/
     manifest.json         copied to dist/ as-is
     icons/                icon16.png, icon48.png, icon128.png
   src/
-    main.jsx              mounts React
+    main.jsx              mounts the popup
     index.css             base styles and color tokens
     App.css               popup styles
     App.jsx               popup logic: load data, range tabs, combine days
@@ -92,19 +92,26 @@ Chroniq/
       SiteRow.jsx         one row: logo, name, time, visits, bar
       Donut.jsx           donut chart made of SVG circles
       WeekChart.jsx       bars for the last 7 days
+    dashboard/
+      main.jsx            mounts the dashboard
+      Dashboard.jsx       dashboard logic and layout
+      dashboard.css       dashboard styles
 ```
 
 ## Install and run (for development)
 
 1. Install Node.js (LTS) from nodejs.org
 2. Open this folder in VS Code and run in the terminal:
+
 ```
-   npm install
-   npm run build
+npm install
+npm run build
 ```
+
 3. Open `chrome://extensions` and turn on **Developer mode**
 4. Click **Load unpacked** and choose the **`dist`** folder (not the project folder)
 5. Pin the extension from the puzzle icon in the toolbar
+6. Click **Open full dashboard** in the popup to see the full page
 
 ### Daily loop
 
@@ -117,7 +124,7 @@ Chroniq/
 
 ## Install for others (without a store)
 
-1. Download the `dist` folder (or a zip of it) from the latest release
+1. Download `Chroniq.zip` from the latest [release](../../releases)
 2. Unzip it, open `chrome://extensions` and turn on **Developer mode**
 3. Click **Load unpacked** and choose the unzipped folder
 
@@ -147,10 +154,11 @@ Chrome rejects extension files whose names start with `_`. Don't create any.
 - [x] Tracking: time and visits per site, per day
 - [x] Popup with the donut chart and site logos
 - [x] Today, 7 days and 30 days views, and the weekly chart
+- [x] Full-page dashboard
+- [x] Export of your data
 - [ ] Fix the visits counter (ignore quick returns)
 - [ ] Test checklist: two tabs of the same site, idle, a new day, restart
 - [ ] Final icons
 - [ ] Categories (distracting, productive, neutral) and daily limits
-- [ ] Full-page dashboard
-- [ ] Export and backup of your data
+- [ ] Import and restore of your data
 - [ ] Publish on Edge Add-ons and the Chrome Web Store
