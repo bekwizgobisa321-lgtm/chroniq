@@ -149,16 +149,3 @@ Chrome rejects extension files whose names start with `_`. Don't create any.
 - "Visits" means the number of times you came back to a site. Switching away and back counts again. A rule to ignore returns within 30 seconds is planned.
 - The idle limit is 60 seconds, so up to a minute of idle time can be counted before tracking stops.
 
-## Roadmap
-
-- [x] Tracking: time and visits per site, per day
-- [x] Popup with the donut chart and site logos
-- [x] Today, 7 days and 30 days views, and the weekly chart
-- [x] Full-page dashboard
-- [x] Export of your data
-- [ ] Fix the visits counter (ignore quick returns)
-- [ ] Test checklist: two tabs of the same site, idle, a new day, restart
-- [ ] Final icons
-- [ ] Categories (distracting, productive, neutral) and daily limits
-- [ ] Import and restore of your data
-- [ ] Publish on Edge Add-ons and the Chrome Web Store
